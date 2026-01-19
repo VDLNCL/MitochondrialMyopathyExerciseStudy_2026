@@ -1,4 +1,3 @@
-
 library(tidyverse)
 library(dplyr)
 library(viridis)
@@ -112,6 +111,388 @@ data$FibreType <- ifelse(data$colMax == data$Type2a, 'Type2a',
                          ifelse(data$colMax == data$Type2a2x, 'Type2a2x', 'TypeI'))
 write.csv(data, "DatawithCTRL.csv")
 
+
+####Distributions after exercise
+##Lines plots for fibre types (n=3) rather than for patients (n=5)
+#Fybre type percentages 
+fname = "Percenatges_FT.csv"
+data_frac2 = read.delim(fname, sep=",", stringsAsFactors=FALSE)
+
+#Lines graph
+#Type I
+T1 <- data_frac2 %>%
+  select(Sample, Exercise, FibreType, total, Percent) %>%
+  filter(FibreType == ' TypeI')
+
+ggplot(T1, aes(x=Exercise, y=Percent, col=Sample)) +
+  geom_point() +
+  geom_line(aes(group=Sample), size=1) +
+  scale_color_manual(values=c("#006666","#669999","#FF9933","#FF9999","#CC3366")) +
+  ggtitle("Type I") +
+  ylab("Fibre proportion (%)") +
+  xlab("") +
+  ylim(0,80) +
+  theme(axis.text.x=element_text(size=16),
+        axis.title=element_text(size=18))+
+  theme(axis.text.y=element_text(size=16),
+        axis.title=element_text(size=18))+
+  theme(panel.background = element_rect(fill="white", color="white"))
+
+  #Type 2a
+  T2a <- data_frac2 %>%
+    select(Sample, Exercise, FibreType, total, Percent) %>%
+    filter(FibreType == 'Type2a')
+  
+  ggplot(T2a, aes(x=Exercise, y=Percent, col=Sample)) +
+    geom_point() +
+    geom_line(aes(group=Sample), size=1) +
+    scale_color_manual(values=c("#006666","#669999","#FF9933","#FF9999","#CC3366")) +
+    ggtitle("Type 2a") +
+    ylab("Fibre proportion (%)") +
+    xlab("") +
+    ylim(0,80) +
+  theme(axis.text.x=element_text(size=16),
+        axis.title=element_text(size=18))+
+    theme(axis.text.y=element_text(size=16),
+          axis.title=element_text(size=18))+
+    theme(panel.background = element_rect(fill="white", color="white"))
+  
+  #Type 2a2x
+  T2ax <- data_frac2 %>%
+    select(Sample, Exercise, FibreType, total, Percent) %>%
+    filter(FibreType == 'Type2a2x')
+  
+  ggplot(T2ax, aes(x=Exercise, y=Percent, col=Sample)) +
+    geom_point() +
+    geom_line(aes(group=Sample), size=1) +
+    scale_color_manual(values=c("#006666","#669999","#FF9933","#FF9999","#CC3366")) +
+    ggtitle("Type 2a2x") +
+    ylab("Fibre proportion (%)") +
+    xlab("") +
+    ylim(0,80) +
+    theme(axis.text.x=element_text(size=16),
+          axis.title=element_text(size=18))+
+    theme(axis.text.y=element_text(size=16),
+          axis.title=element_text(size=18))+
+    theme(panel.background = element_rect(fill="white", color="white"))
+  
+  
+#Lines graph
+#P1
+P1 <- data_frac2 %>%
+   select(Sample, Exercise, FibreType, total, Percent) %>%
+  filter(Sample == 'P1')%>%
+  mutate(CI_lower=Percent - 5,
+           CI_upper=Percent+5)
+  
+graph <- ggplot(P1, aes(x=Exercise, y=Percent, col=FibreType)) +
+    geom_point() +
+    geom_line(aes(group=FibreType), show.legend = F, size=2.5, alpha=0.8) +
+    geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.1, size=1) +
+    scale_x_discrete(expand = expansion(mult = c(0.1, 0)))+
+    scale_color_manual(values=c("seagreen", "firebrick2", "magenta4")) +
+    ggtitle("P1") +
+    ylab("Fibre type proportion (%)") +
+    xlab("") +
+    ylim(-10,100) +
+    theme(axis.text=element_text(size=16),
+          axis.title=element_text(size=18), 
+          panel.background = element_rect(fill="white", color="white"), 
+          plot.margin = margin(10, 10, 10, 0),   # ↓ decrease left margin here
+          panel.spacing = unit(0, "lines"))
+graph
+ggsave("P1_CI.png", plot=graph, width=4, height=3.5, units="in", dpi=1200)
+  
+
+#Combine the three classes
+#Counts for Pre and Post
+  pre_counts <- c(54, 254, 171)   # Type2a2x, Type2a, TypeI
+  post_counts <- c(8, 421, 352)
+  total_pre <- sum(pre_counts)     # 479
+  total_post <- sum(post_counts)   # 781
+
+  results <- lapply(1:3, function(i) {
+    test <- prop.test(x = c(pre_counts[i], post_counts[i]),
+                      n = c(total_pre, total_post))
+    c(Estimate_diff = test$estimate[2] - test$estimate[1],
+      CI_lower = test$conf.int[1],
+      CI_upper = test$conf.int[2],
+      p_raw = test$p.value)
+  })
+  
+  results <- do.call(rbind, results)
+  rownames(results) <- c("Type2a2x", "Type2a", "TypeI")
+  
+#Apply Bonferroni correction
+  resultsP1 <- cbind(results, p_adj = p.adjust(results[, "p_raw"], method = "bonferroni"))
+  resultsP1
+
+#P2
+  P2 <- data_frac2 %>%
+    select(Sample, Exercise, FibreType, total, Percent) %>%
+    filter(Sample == 'P2')%>%
+    mutate(CI_lower=Percent - 5,
+           CI_upper=Percent+5)
+  
+ graph <- ggplot(P2, aes(x=Exercise, y=Percent, col=FibreType)) +
+    geom_point() +
+    geom_line(aes(group=FibreType), show.legend = F, size=2.5, alpha=0.8) +
+    geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.1, size=1) +
+    scale_x_discrete(expand = expansion(mult = c(0.1, 0)))+
+    scale_color_manual(values=c("seagreen", "firebrick2", "magenta4")) +
+    ggtitle("P2") +
+    ylab("Fibre type proportion (%)") +
+    xlab("") +
+    ylim(-10,100) +
+    theme(axis.text=element_text(size=16),
+          axis.title=element_text(size=18), 
+          panel.background = element_rect(fill="white", color="white"), 
+          plot.margin = margin(10, 10, 10, 0),   # ↓ decrease left margin here
+          panel.spacing = unit(0, "lines"))
+
+ graph 
+  ggsave("P2_CI.png", plot=graph, width=4, height=3.5, units="in", dpi=1200)
+  
+  P2I <- prop.test(x = c(167, 252), n = c(518, 777))
+  P2I #p-value =  0.9903
+  #pre    post 
+  #0.3223938 0.3243243
+  P22a <- prop.test(x = c(239, 260), n = c(518, 777))
+  P22a #p-value = 5.79e-06  ****
+  #pre    post 
+  #0.4613900 0.3346203 
+  P22x <- prop.test(x= c(112, 265), n= c(518, 777))
+  P22x #p-value = 1.733e-06  ****
+  #pre    post 
+  #0.2162162 0.3410553 
+
+  
+#Combine the three classes
+#Counts for Pre and Post
+  pre_counts <- c(112, 239, 167)   # Type2a2x, Type2a, TypeI
+  post_counts <- c(265, 260, 252)
+  total_pre <- sum(pre_counts)     
+  total_post <- sum(post_counts)   
+  
+  results <- lapply(1:3, function(i) {
+    test <- prop.test(x = c(pre_counts[i], post_counts[i]),
+                      n = c(total_pre, total_post))
+    c(Estimate_diff = test$estimate[2] - test$estimate[1],
+      CI_lower = test$conf.int[1],
+      CI_upper = test$conf.int[2],
+      p_raw = test$p.value)
+  })
+  
+  results <- do.call(rbind, results)
+  rownames(results) <- c("Type2a2x", "Type2a", "TypeI")
+  
+  #Apply Bonferroni correction
+  resultsP2 <- cbind(results, p_adj = p.adjust(results[, "p_raw"], method = "bonferroni"))
+  resultsP2
+  
+  #P3
+  P3 <- data_frac2 %>%
+    select(Sample, Exercise, FibreType, total, Percent) %>%
+    filter(Sample == 'P3')%>%
+    mutate(CI_lower=Percent - 5,
+           CI_upper=Percent+5)
+  
+  graph <- ggplot(P3, aes(x=Exercise, y=Percent, col=FibreType)) +
+    geom_point() +
+    geom_line(aes(group=FibreType), show.legend = F, size=2.5, alpha=0.8) +
+    geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.1, size=1) +
+    scale_x_discrete(expand = expansion(mult = c(0.1, 0)))+
+    scale_color_manual(values=c("seagreen", "firebrick2", "magenta4")) +
+    ggtitle("P3") +
+    ylab("Fibre type proportion (%)") +
+    xlab("") +
+    ylim(-10,100) +
+    theme(axis.text=element_text(size=16),
+          axis.title=element_text(size=18), 
+          panel.background = element_rect(fill="white", color="white"), 
+          plot.margin = margin(10, 10, 10, 0),   # ↓ decrease left margin here
+          panel.spacing = unit(0, "lines"))
+  
+  graph
+  
+  ggsave("P3_CI.png", plot=graph, width=4, height=3.5, units="in", dpi=1200)
+  
+  
+  P3I <- prop.test(x = c(112, 383), n = c(350, 1323))
+  P3I #p-value =  0.2955
+  #pre    post 
+  #0.3200000 0.2894936 
+  P32a <- prop.test(x = c(197, 883), n = c(350, 1323))
+  P32a #p-value = 0.0003517  ***
+  #pre    post 
+  #0.5628571 0.6674225 
+  P32x <- prop.test(x= c(41, 57), n= c(350, 1323))
+  P32x #p-value = 3.076e-07  ****
+  #pre    post 
+  #0.1171429 0.0430839 
+
+  
+  
+  #Combine the three classes
+  #Counts for Pre and Post
+  pre_counts <- c(41, 197, 112)   # Type2a2x, Type2a, TypeI
+  post_counts <- c(57, 883, 383)
+  total_pre <- sum(pre_counts)     
+  total_post <- sum(post_counts)   
+  
+  results <- lapply(1:3, function(i) {
+    test <- prop.test(x = c(pre_counts[i], post_counts[i]),
+                      n = c(total_pre, total_post))
+    c(Estimate_diff = test$estimate[2] - test$estimate[1],
+      CI_lower = test$conf.int[1],
+      CI_upper = test$conf.int[2],
+      p_raw = test$p.value)
+  })
+  
+  results <- do.call(rbind, results)
+  rownames(results) <- c("Type2a2x", "Type2a", "TypeI")
+  
+  #Apply Bonferroni correction
+  resultsP3 <- cbind(results, p_adj = p.adjust(results[, "p_raw"], method = "bonferroni"))
+  resultsP3
+
+  #P4
+ P4 <- data_frac2 %>%
+    select(Sample, Exercise, FibreType, total, Percent) %>%
+    filter(Sample == 'P4')%>%
+    mutate(CI_lower=Percent - 5,
+           CI_upper=Percent+5)
+  
+ graph <- ggplot(P4, aes(x=Exercise, y=Percent, col=FibreType)) +
+    geom_point() +
+    geom_line(aes(group=FibreType), show.legend = F, size=2.5, alpha=0.8) +
+    geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.1, size=1) +
+    scale_x_discrete(expand = expansion(mult = c(0.1, 0)))+
+    scale_color_manual(values=c("seagreen", "firebrick2", "magenta4")) +
+    ggtitle("P4") +
+    ylab("Fibre type proportion (%)") +
+    xlab("") +
+    ylim(-10,100) +
+    theme(axis.text=element_text(size=16),
+          axis.title=element_text(size=18), 
+          panel.background = element_rect(fill="white", color="white"), 
+          plot.margin = margin(10, 10, 10, 0),   # ↓ decrease left margin here
+          panel.spacing = unit(0, "lines"))
+  
+  graph
+  
+  ggsave("P4_CI.png", plot=graph, width=4, height=3.5, units="in", dpi=1200)
+  
+  
+  P4I <- prop.test(x = c(36, 303), n = c(289, 1494))
+  P4I #p-value =  0.002519  ***
+  #pre    post 
+  #0.1245675 0.2028112 
+  P42a <- prop.test(x = c(202, 822), n = c(289, 1494))
+  P42a #p-value = 3.896e-06  ***
+  #pre    post 
+  #0.6989619 0.5502008  
+  P42x <- prop.test(x= c(51, 369), n= c(289, 1494))
+  P42x #p-value = 0.01206  **
+  #pre    post 
+  #0.1764706 0.2469880
+  
+  #Combine the three classes
+  #Counts for Pre and Post
+  pre_counts <- c(51, 202, 36)   # Type2a2x, Type2a, TypeI
+  post_counts <- c(369, 822, 303)
+  total_pre <- sum(pre_counts)     
+  total_post <- sum(post_counts)   
+  
+  results <- lapply(1:3, function(i) {
+    test <- prop.test(x = c(pre_counts[i], post_counts[i]),
+                      n = c(total_pre, total_post))
+    c(Estimate_diff = test$estimate[2] - test$estimate[1],
+      CI_lower = test$conf.int[1],
+      CI_upper = test$conf.int[2],
+      p_raw = test$p.value)
+  })
+  
+  results <- do.call(rbind, results)
+  rownames(results) <- c("Type2a2x", "Type2a", "TypeI")
+  
+  #Apply Bonferroni correction
+  resultsP4 <- cbind(results, p_adj = p.adjust(results[, "p_raw"], method = "bonferroni"))
+  resultsP4
+  
+  #P5
+  P5 <- data_frac2 %>%
+    select(Sample, Exercise, FibreType, total, Percent) %>%
+    filter(Sample == 'P5')%>%
+    mutate(CI_lower=Percent - 5,
+           CI_upper=Percent+5)
+  
+  graph <- ggplot(P5, aes(x=Exercise, y=Percent, col=FibreType)) +
+    geom_point() +
+    geom_line(aes(group=FibreType),show.legend = F, size=2.5, alpha=0.8) +
+    geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.1, size=1) +
+    scale_x_discrete(expand = expansion(mult = c(0.1, 0)))+
+    scale_color_manual(values=c("seagreen", "firebrick2", "magenta4")) +
+    ggtitle("P5") +
+    ylab("Fibre type proportion (%)") +
+    xlab("") +
+    ylim(-10,100) +
+    theme(axis.text=element_text(size=16),
+          axis.title=element_text(size=18), 
+          panel.background = element_rect(fill="white", color="white"), 
+          plot.margin = margin(10, 10, 10, 0),   # ↓ decrease left margin here
+          panel.spacing = unit(0, "lines"))
+  
+  graph
+  
+  ggsave("P5_CI.png", plot=graph, width=4, height=3.5, units="in", dpi=1200)
+  
+  
+  P5I <- prop.test(x = c(194, 133), n = c(579, 522))
+  P5I #p-value = 0.004447  ***
+  #pre    post 
+  #0.3350604 0.2547893  
+  P52a <- prop.test(x = c(330, 329), n = c(579, 522))
+  P52a #p-value = 0.04801  **
+  #pre    post 
+  #0.5699482 0.6302682   
+  P52x <- prop.test(x= c(55, 60), n= c(579, 522))
+  P52x #p-value = 0.326 
+  #pre    post 
+  #0.09499136 0.11494253
+  
+  
+  #Combine the three classes
+  #Counts for Pre and Post
+  pre_counts <- c(55, 330, 194)   # Type2a2x, Type2a, TypeI
+  post_counts <- c(60, 329, 133)
+  total_pre <- sum(pre_counts)     
+  total_post <- sum(post_counts)   
+  
+  results <- lapply(1:3, function(i) {
+    test <- prop.test(x = c(pre_counts[i], post_counts[i]),
+                      n = c(total_pre, total_post))
+    c(Estimate_diff = test$estimate[2] - test$estimate[1],
+      CI_lower = test$conf.int[1],
+      CI_upper = test$conf.int[2],
+      p_raw = test$p.value)
+  })
+  
+  results <- do.call(rbind, results)
+  rownames(results) <- c("Type2a2x", "Type2a", "TypeI")
+  
+  #Apply Bonferroni correction
+  resultsP5 <- cbind(results, p_adj = p.adjust(results[, "p_raw"], method = "bonferroni"))
+  resultsP5
+  
+  
+write.csv(resultsP1, "T:/Valeria/3 Experiments/Fibre type_exercise/Fibre_Typing_Exercise/R analysis FT/BonfCombined_P1.csv")
+write.csv(resultsP2, "T:/Valeria/3 Experiments/Fibre type_exercise/Fibre_Typing_Exercise/R analysis FT/BonfCombined_P2.csv")
+write.csv(resultsP3, "T:/Valeria/3 Experiments/Fibre type_exercise/Fibre_Typing_Exercise/R analysis FT/BonfCombined_P3.csv") 
+write.csv(resultsP4, "T:/Valeria/3 Experiments/Fibre type_exercise/Fibre_Typing_Exercise/R analysis FT/BonfCombined_P4.csv")
+write.csv(resultsP5, "T:/Valeria/3 Experiments/Fibre type_exercise/Fibre_Typing_Exercise/R analysis FT/BonfCombined_P5.csv")
+
+ 
 
 ####Hypertrophy after exercise
 fname = "DatawithCTRL.csv"
