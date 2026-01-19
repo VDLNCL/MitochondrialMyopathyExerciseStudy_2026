@@ -626,3 +626,115 @@ for (fn in sort(unique(Type2adf$Sample))){
   print(fn)
   print(t.test(pre,post,alternative="two.sided"))
 }
+
+
+
+#Force measuremnts
+
+# Libraries
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+
+library(cowplot)
+library(lme4)
+library(Matrix)
+library(cowplot)
+library(plotrix)
+library(broom)
+library(ggplotlyExtra)
+library(ggrepel)
+
+# First let's read raw data into memory
+fname = "Force_measurement.csv"
+dat = read.delim(fname, sep=",", stringsAsFactors=FALSE)
+head(dat)
+
+#Difference between healthy people and mitochondrial myopathy patients
+dat1 <- dat%>%
+  filter(Class == "Controls" |
+           Class == "Pre-ex")
+t.test(Force ~ Class, data= dat1, alternative = c("two.sided"),
+       mu = 0, paired = FALSE, var.equal = FALSE, conf.level = 0.95)
+#Control 150.074, Pre-ex 128.1667, p-value = 0.003002
+
+
+#Exercise graph CTRL VS pre-ex
+#EXERCISE graph
+ggplot(dat1, aes(x=Sample, y=Force)) +
+  geom_boxplot(aes(colour=Class), width=0.9, alpha=0.1, outlier.shape=(NA))+
+  geom_jitter(aes(colour=Class), size=3, alpha=0.6, position=position_jitterdodge())+
+  scale_color_manual(values=c("black", "blue","grey50"))+
+  ggtitle("Force measurements baseline") +
+  xlab("") +
+  ylab("Specific force (kPa)") + ylim(50,250)+
+  theme(axis.text.x=element_text(size=16),
+        axis.title=element_text(size=18))+
+  theme(axis.text.y=element_text(size=16),
+        axis.title=element_text(size=18))+
+  theme(panel.background = element_rect(fill="white", color="white"))
+
+
+# Fibre type CTRL vs type I
+head(dat)
+TypeI <- dat %>%
+  filter(FibreType == "fibre type I")
+head(TypeI)
+
+TypeI <- TypeI %>%
+  mutate(Class = factor(Class,levels=c("Controls", "Pre-ex", "Post-ex")))
+
+
+#EXERCISE graph
+ggplot(TypeI, aes(x=Sample, y=Force)) +
+  geom_boxplot(aes(colour=Class), width=0.9, alpha=0.1, outlier.shape=(NA))+
+  geom_jitter(aes(colour=Class), size=3, alpha=0.6, position=position_jitterdodge())+
+  scale_color_manual(values=c("black", "blue","grey50"))+
+  ggtitle("Force measurements Type I") +
+  xlab("") +
+  ylab("Specific force (kPa)") + ylim(50,250)+
+  theme(axis.text.x=element_text(size=16),
+        axis.title=element_text(size=18))+
+  theme(axis.text.y=element_text(size=16),
+        axis.title=element_text(size=18))+
+  theme(panel.background = element_rect(fill="white", color="white"))
+
+
+TypeItest <- TypeI %>%
+  filter(Sample != "Controls")
+head(TypeItest)
+t.test(Force ~ Class, data= TypeItest, alternative = c("two.sided"),
+       mu = 0, paired = FALSE, var.equal = FALSE, conf.level = 0.95)
+#Pre-ex 126.53, Post-ex 126.31, p-value = 0.948
+
+
+
+#Type II fibres
+TypeII <- dat %>%
+  filter(FibreType == "fibre type II")
+head(TypeII)
+
+TypeII <- TypeII %>%
+  mutate(Class = factor(Class,levels=c("Controls", "Pre-ex", "Post-ex")))
+
+#EXERCISE graph
+ggplot(TypeII, aes(x=Sample, y=Force)) +
+  geom_boxplot(aes(colour=Class), width=0.9, alpha=0.1, outlier.shape=(NA))+
+  geom_jitter(aes(colour=Class), size=3, alpha=0.6, position=position_jitterdodge())+
+  scale_color_manual(values=c("black", "blue","grey50"))+
+  ggtitle("Force measurements Type II") +
+  xlab("") +
+  ylab("Specific force (kPa)") + ylim(50,250)+
+  theme(axis.text.x=element_text(size=16),
+        axis.title=element_text(size=18))+
+  theme(axis.text.y=element_text(size=16),
+        axis.title=element_text(size=18))+
+  theme(panel.background = element_rect(fill="white", color="white"))
+
+
+TypeIItest <- TypeII %>%
+  filter(Sample != "Controls")
+head(TypeIItest)
+t.test(Force ~ Class, data= TypeIItest, alternative = c("two.sided"),
+       mu = 0, paired = FALSE, var.equal = FALSE, conf.level = 0.95)
+#Pre-ex 150.0741, Post-ex 128.1667, p-value = 0.0142
