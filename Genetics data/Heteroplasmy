@@ -1,0 +1,100 @@
+#Linear mixed model
+#Libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(lme4)
+library(lmerTest)   # adds p-values for lmer models
+library(broom.mixed)
+
+df = read.delim(file="Multiplex_data.csv",stringsAsFactors=FALSE,sep=",")
+head(df)
+
+##EXERCISE COHORT OCTOBER 2025
+##colors "blue","grey50"
+dat <- df %>%
+  mutate(Training = factor(Training, levels=c("Pre-ex", "Post-ex")))
+
+H <- ggplot(dat, aes(x=Sample, y=Percentage)) +
+  geom_boxplot(aes(colour=Training), width=0.9, alpha=0.4, outlier.shape=(NA)) +
+  geom_jitter(aes(colour=Training), size=3, alpha=0.4, position=position_jitterdodge()) +
+  #stat_boxplot( aes(Sample, Percentage),
+                #geom='errorbar', linetype=2, width=0.6) +
+  #ggtitle("P5 deletion level") +
+  xlab("") +
+  ylab("Heteroplasmy level (%)") +
+  ylim(-20,100) +
+  scale_color_manual(values=c("blue","grey50")) +
+  theme(axis.text.x=element_text(size=15),
+        axis.title=element_text(size=17))+
+  theme(axis.text.y=element_text(size=15),
+        axis.title=element_text(size=17))+
+  theme(panel.background = element_rect(fill="white", color="white"))
+H
+ggsave("Heteroplasmy.png", plot=H, width=4.5, height=5, units="in", dpi=1200)
+
+# Ensure Training is a factor
+df$Training <- factor(df$Training, levels = unique(df$Training))
+
+# Fit model per Sample and extract Training effect
+results_list <- df %>%
+  group_by(Sample) %>%
+  group_map(~ {
+    model <- lmer(Percentage ~ Training + (1|Plate), data = .x, REML = FALSE)
+    
+    broom.mixed::tidy(model, effects = "fixed") %>%
+      filter(grepl("Training", term))  # select Training effect(s)
+  }, .keep = TRUE)
+
+# Add Sample names manually
+sample_names <- unique(df$Sample)
+results <- bind_rows(
+  lapply(seq_along(results_list), function(i) {
+    cbind(Sample = sample_names[i], results_list[[i]])
+  })
+)
+
+# View results
+print(results)
+
+# Optional: sort by p-value
+results <- results %>%
+  arrange(p.value)
+print(results)
+
+
+
+#Plotting the error, estimate, CI
+#Example data: mimicking your table for illustration
+df_plot <- data.frame(
+  Sample = c("P1", "P2", "P3", "P4", "P5"),
+  estimate = c(11.73, 4.51, -10.38, 2.35, -3.49),
+  std.error = c(0.83, 2.76, 0.72, 1.38, 0.44)
+)
+
+# Compute 95% confidence intervals
+df_plot <- df_plot %>%
+  mutate(
+    lower = estimate - 1.96 * std.error,
+    upper = estimate + 1.96 * std.error
+  )
+
+# Plot
+E <- ggplot(df_plot, aes(x = Sample, y = estimate)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, size= 1.3, color = "blue") + # 95% CI
+  geom_point(size = 3, color = "grey15") +             # the estimate
+  geom_hline(yintercept = 0, linetype = "dashed") + # reference line at zero
+  labs(
+    x = "",
+    y = "Estimated Training Effect",
+    title = "Estimate, Standard Error, and 95% CI per Sample")+
+    #subtitle = "Black point = estimate, blue bars = 95% CI")+
+  theme(axis.text.x=element_text(size=15),
+        axis.title=element_text(size=17))+
+  theme(axis.text.y=element_text(size=15),
+        axis.title=element_text(size=17))+
+  theme(panel.background = element_rect(fill="white", color="white"))
+#theme_minimal(base_size = 14) +
+
+E
+ggsave("SE.png", plot=E, width=3.5, height=5, units="in", dpi=1200)
