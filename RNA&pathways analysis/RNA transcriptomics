@@ -1,0 +1,218 @@
+library(limma)
+library(edgeR)
+library(ggplot2)
+library(gplots)
+library(ggrepel)
+library(RColorBrewer)
+library(plyr)
+library(pheatmap)
+library(statmod)
+library(data.table)
+library(tidyr)
+library(extrafont)
+library(tibble)
+library(DESeq2)
+library(EnhancedVolcano)
+library(plotly)
+
+####################################################
+
+#Adjust the file you want to work with
+pheno=read.csv("pheno.csv")
+pheno$exercise=as.factor(pheno$exercise)
+pheno$delclass=as.factor(pheno$delclass)
+pheno$ubiquinone=as.factor(pheno$ubiquinone)
+# Combine exercise and ubiquinone into a single factor
+pheno$ex_ubi <- as.factor(paste(pheno$exercise, pheno$ubiquinone, sep = "_"))
+# Optional: check the new variable
+table(pheno$ex_ubi)
+
+
+data=read.csv("Genes_table.csv", row.names = 1)
+dge=DGEList(data)
+cpm=cpm(dge)
+lcpm=cpm(dge, log=TRUE)
+
+### filter
+keep1=rowSums(cpm(dge)>=1)>=5 
+keep2=rowSums(cpm(dge)>=1)>=6 ### <- use this one
+keep3=rowSums(cpm(dge)>=1)>=7
+keep4=rowSums(cpm(dge)>=1)>=8
+keep5=rowSums(cpm(dge)>=1)>=9
+keep6=rowSums(cpm(dge)>=1)>=10
+
+## Filt
+dge_filt1=dge[keep1,,keep.lib.sizes=FALSE]
+dge_filt2=dge[keep2,,keep.lib.sizes=FALSE] ### <- use this one
+dge_filt3=dge[keep3,,keep.lib.sizes=FALSE]
+dge_filt4=dge[keep4,,keep.lib.sizes=FALSE]
+dge_filt5=dge[keep5,,keep.lib.sizes=FALSE]
+dge_filt6=dge[keep6,,keep.lib.sizes=FALSE]
+
+### Output
+dim(dge)
+dim(dge_filt1)
+dim(dge_filt2) ### <- use this one
+dim(dge_filt3)
+dim(dge_filt4)
+dim(dge_filt5)
+dim(dge_filt6)
+
+### USE THIS ONE -> 
+dge_filt2
+
+### Make a Matrix of dge
+dge_filt2=as.matrix(dge_filt2)
+dge_filt2 =  DGEList(counts = dge_filt2, group = pheno$ID)
+
+### Normalize for library size and composition 
+dge_filt2  <- calcNormFactors(dge_filt2, method="TMM")
+dge_filt2$samples$norm.factors
+
+#Run the model for liner regression
+design=model.matrix(~0 + exercise + delclass + ubiquinone, pheno)
+colnames(design)=c('Pre','Post','DelClass','Ubiquinone')
+#Combined ex+ubi
+design=model.matrix(~0 + exercise + delclass + ubiquinone + ex_ubi, pheno)
+colnames(design)=c('Pre','Post','DelClass','Ubiquinone', 'Combo')
+#error
+
+### First voom transform
+v <- voom(dge_filt2, design, plot = TRUE)
+
+# Estimate duplicate correlation (for paired samples)
+corfit <- duplicateCorrelation(v, design, block=pheno$pair)
+
+#normilization step that plots varience plot 
+v.norm <- voom(dge_filt2, design, plot = TRUE, block=pheno$pair, cor=corfit$consensus)
+
+# outputs normalised counts as an excel/dataframe
+v.norm_out=as.matrix(v.norm)
+boxplot(log2(dge_filt2$counts))
+boxplot(v.norm_out)
+#write.csv(v.norm_out,"Genes_norms_countGH.csv")
+
+# MDS plot like PCA but adds the distance component to "flatten" the plot
+plotMDS(v.norm_out, col=as.numeric(pheno$exercise:pheno$delclass:pheno$ubiquinone))
+plotMDS(v.norm_out, col=as.numeric(pheno$exercise))
+plotMDS(v.norm_out, col=as.numeric(pheno$ubiquinone))
+plotMDS(v.norm_out, col=as.numeric(pheno$delclass))
+plotMDS(v.norm_out, col=as.numeric(pheno$ex_ubi))
+
+#liner regression/Baysian (DEG)
+fit=lmFit(v.norm, design, block=pheno$pair, correlation=corfit$consensus)
+fit=eBayes(fit)
+
+### Extract post- relative to pre-
+con=makeContrasts(prevpost=Post-Pre, del=DelClass, treatment=Ubiquinone, combo= levels=design)
+fit_2=contrasts.fit(fit, con)
+fit_2=eBayes(fit_2)
+
+### Extract Contrasts
+Exercise=topTable(fit_2, coef="prevpost", adjust.method="BH", n=Inf)
+DEL=topTable(fit_2, coef="del", adjust.method="BH", n=Inf)
+Ubiquinone=topTable(fit_2, coef="treatment", adjust.method="BH", n=Inf)
+
+### export
+write.csv(Exercise, "Genes_Exercise_GH.csv")
+write.csv(DEL, "Genes_Deletion_GH.csv")
+write.csv(Ubiquinone, "Genes_Ubiquinone_GH.csv")
+
+
+#QQ plots
+qqplot(Exercise$P.Val, ppoints(length(Exercise$P.Val)), main = "Q-Q Plot of P-values", 
+       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+abline(0,1)
+
+qqplot(DEL$P.Val, ppoints(length(DEL$P.Val)), main = "Q-Q Plot of P-values", 
+       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+abline(0,1)
+
+qqplot(Ubiquinone$P.Val, ppoints(length(Ubiquinone$P.Val)), main = "Q-Q Plot of P-values", 
+       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+abline(0,1)
+
+#Set up PCA analysis - Normalised Count Data after filt
+dge_pca=as.matrix(v.norm)
+dge_genes=row.names(dge_pca)
+pca_data=prcomp(t(dge_pca))
+pca_data_perc=round(100*pca_data$sdev^2/sum(pca_data$sdev^2),1)
+df_pca_data=data.frame(PC1=pca_data$x[,1], PC2=pca_data$x[,2], PC3=pca_data$x[,3],sample=colnames(data), condition = as.factor(pheno$pair))
+#find_hull=function(df_pca_data) df_pca_data[chull(df_pca_data$PC1, df_pca_data$PC2, df_pca_data$PC3)]
+#hulls=ddply(df_pca_data, "condition", find_hull)
+
+ggplot(df_pca_data, aes(PC1, PC2, color=condition, fill=condition))+ 
+  geom_point(size=4)+ 
+  labs(x=paste0("PC1(",pca_data_perc[1],")"),y=paste0("PC2 (",pca_data_perc[2],")"))+
+  scale_color_manual(values = c("#008080","#31367e","#b4127c","#ff8863","#fec83c"))+
+  geom_text_repel(aes(label=sample), point.padding = 0.5)+
+  theme_classic()
+
+##Volcano
+write.csv(res_clean, "DE_genes.csv")
+#Add column for Test (True, Middle and False) and DEgene
+#Edit with right names
+#Delete non-coding genes
+DATA=read.csv("Results_Clean.csv")
+
+ggplot(DATA, aes(x=logFC, y=-log10(P.Value), name=DEgene)) +
+  geom_point(aes(colour=Test), size=3, alpha=0.4) +
+  scale_colour_manual(values=c("#999999", "red","blue")) +
+  geom_vline(xintercept=1.5, colour="grey40", linetype=3) +
+  geom_vline(xintercept=-1.5, colour="grey40", linetype=3) +
+  geom_hline(yintercept=-log10(0.05), colour="grey40", linetype=3) +
+  ylim(0,4) +
+  xlim(-2.5,4) +
+  theme(legend.position = "right") +
+  labs(x=expression(paste("Log"[2], " FC"))) +
+  labs(y=expression(paste("Log"[10], " P value"))) +
+  geom_text_repel(data = DATA, aes(logFC, -log10(P.Value),
+                                   label=DEgene), size=2.5,
+                  max.overlaps = Inf,            # reduce overcrowding
+                  box.padding = unit(0.7, "lines"),   # more space around label
+                  point.padding = unit(0.1, "lines"), # more space around points
+                  segment.size = 0.3,           # thinner lines
+                  segment.color = "grey20",     # lighter connector lines
+                  force = 2) +                  # stronger repulsion
+  theme(axis.text.x=element_text(size=13),
+        axis.title=element_text(size=17),
+        axis.text.y=element_text(size=13), 
+        panel.background = element_rect(fill="white", color="white"))
+
+counts_hm=v.norm_out[rownames(filter_EX),]
+heat_hm <- pheno[match(colnames(counts_hm), pheno_hm$ID), ]
+
+genes <- rownames(counts_hm)
+pairs <- unique(pheno_hm$pair)
+fold_change_mat <- matrix(NA, nrow = nrow(counts_hm), ncol = length(pairs),
+                          dimnames = list(genes, pairs))
+
+#LOOP
+for (p in pairs) {
+  idx_pair <- which(pheno_hm$pair == p)
+  if (length(idx_pair) != 2) next 
+  pair_samples <- pheno_hm[idx_pair, ]
+  pre_idx <- idx_pair[pair_samples$exercise == "N"]
+  post_idx <- idx_pair[pair_samples$exercise == "Y"]
+  
+  if (length(pre_idx) == 1 && length(post_idx) == 1) {
+    fc <- (counts_hm[, post_idx] + 1) - (counts_hm[, pre_idx] + 1)
+    fold_change_mat[, as.character(p)] <- fc
+  }
+}
+fold_change_mat <- fold_change_mat[complete.cases(fold_change_mat), ]
+fold_change_mat <- fold_change_mat[apply(fold_change_mat, 1, function(x) all(is.finite(x))), ]
+fold_change_mat <- fold_change_mat[apply(fold_change_mat, 1, function(x) sd(x) != 0), ]
+
+#Correlation method
+Heatmap <- pheatmap(fold_change_mat,
+         scale = "row",
+         cluster_cols = TRUE,
+         clustering_distance_rows = "correlation",
+         clustering_distance_cols = "correlation",
+         clustering_method = "average",
+         color = colorRampPalette(c("red","white","blue"))(50))
+
+Heatmap
+ggsave("HeatmapOct25.png", plot=Heatmap, width=6.5, height=7.5, units="in", dpi=1200)
+
