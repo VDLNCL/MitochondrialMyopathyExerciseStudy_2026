@@ -1,0 +1,87 @@
+### Pathway analysis 
+#install.packages("BiocManager")
+BiocManager::install(c("clusterProfiler", "ReactomePA", "org.Hs.eg.db", "enrichplot"))
+BiocManager::install("gprofiler2")
+BiocManager::install("GO.db")
+BiocManager::install("org.Hs.eg.db")
+BiocManager::install("ReactomePA")
+## Pathway analysis
+library(dplyr)
+library(tidyr)
+library(clusterProfiler)
+library(ReactomePA)
+library(org.Hs.eg.db)
+library(enrichplot)
+library(gprofiler2)
+library(org.Hs.eg.db)
+library(gprofiler2)
+library(ggplot2)
+
+
+data=read.csv("DE_genes.csv")
+#data=read.csv("Ranked_DE_genes.csv")
+
+
+# Filter significant genes for ORA
+sig_genes <- data %>%
+  filter(abs(logFC) > 1.4948) %>%
+  separate_rows(DE_gene, sep = "\\|")%>%
+  pull(DE_gene)
+
+print(sig_genes)
+
+entrez_ids <- bitr(sig_genes,
+                   fromType = "SYMBOL",
+                   toType = "ENTREZID",
+                   OrgDb = org.Hs.eg.db)
+mapped_genes <- entrez_ids$SYMBOL
+failed_genes <- setdiff(sig_genes, mapped_genes)
+failed_genes
+
+### GO biological Process
+ego_mf <- enrichGO(gene = entrez_ids$ENTREZID, OrgDb=org.Hs.eg.db, ont="MF",
+                   pAdjustMethod="BH",
+                   pvalueCutoff=0.05, qvalueCutoff=0.2, readable=TRUE)
+### Plot
+dotplot(ego_mf, showCategory=20) + ggtitle("GO Biological Process enrichment")
+
+
+### G Profiler
+gp_res <- gost(query = entrez_ids$ENTREZID, organism = "hsapiens", ordered_query = FALSE, user_threshold = 0.05, correction_method = "fdr",
+               sources = c("GO:MF"))
+head(gp_res$result)
+gostplot(gp_res, capped = TRUE, interactive = FALSE)
+
+### Graph to 40 terms
+df <- gp_res$result
+df_top <- head(df[order(df$p_value), ], 40)
+
+#ggplot(df_top, aes(x = -log10(p_value), y = reorder(term_name, -p_value),
+                   #size = intersection_size, color = source)) +
+#geom_point(alpha=0.6) +
+  #scale_color_manual(values = c("blue")) +
+  #scale_size_continuous(range = c(0, 5)) +
+  #labs(x = "-log10(p-value)", y = "Pathway / GO term", title = "g:Profiler enrichment") +
+  #theme_minimal()
+
+#interchange the GO:
+MF <- ggplot(df_top, aes(x = -log10(p_value), 
+                   y = reorder(term_name, -p_value),
+                   size = intersection_size, 
+                   color = -log10(p_value))) +   # color by significance
+  geom_point(alpha=0.6) +
+  labs(x = "-log10(p-value)", y = "Pathway / GO term",
+       title = "GO:MF",
+       color = "-log10(p-value)", size = "Intersection size") +
+  theme_minimal() +
+  scale_size_continuous(range = c(2, 8)) +
+  scale_color_gradient(low = "blue", high = "red")   # customize palette
+#"GO:BP","GO:CC","GO:MF"
+
+BP
+CC
+MF
+
+ggsave("GOBP.png", plot=BP, width=7, height=7, units="in", dpi=1200)
+ggsave("GOCC.png", plot=CC, width=7, height=3.5, units="in", dpi=1200)
+ggsave("GOMF.png", plot=MF, width=9, height=4.5, units="in", dpi=1200)
